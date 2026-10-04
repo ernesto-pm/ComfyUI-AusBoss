@@ -9,9 +9,11 @@ All notable changes to ComfyUI-AusBoss are documented here.
   same as clicking Upload. The node shows a dashed outline while you hold
   a file over it. The video nodes take a dropped video the same way, now
   also when you drop it on the picture rather than the title bar.
-- **Crop + Rotate + Pad: type your own ratio.** The box after the ratio
-  buttons takes a width and height, such as `8,9` for 8:9. Press Enter and
-  it pads (or crops) to that shape like any ratio button.
+- **Crop + Rotate + Pad: type your own ratio.** The Custom row under the
+  ratio buttons has a box for the width and one for the height. Type them,
+  press Enter, and it pads (or crops) to that shape like any ratio button.
+  Halves and other decimals work: 4.5 and 16 make 4.5:16. Ratios in
+  `ausboss_presets.json` can have decimals too.
 
 ## 2.6.1 - 2026-10-03
 

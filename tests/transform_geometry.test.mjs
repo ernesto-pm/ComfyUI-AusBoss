@@ -431,6 +431,7 @@ test("the size chain shows Align and names its strip ahead of a resize", () => {
 import {
   IDENTITY_TRANSFORM,
   aspectMatches,
+  aspectPair,
   canvasSize,
   isUntouched,
   padAround,
@@ -822,14 +823,23 @@ test("the knob keeps its spot on its arm while it turns", () => {
   assert.ok(Math.abs(turned.x - 120) < 1e-9 && Math.abs(turned.y - 214) < 1e-9, JSON.stringify(turned));
 });
 
-test("a typed custom ratio reads as two whole numbers, reduced", () => {
-  assert.equal(parseCustomRatio("8,9"), "8:9");
-  assert.equal(parseCustomRatio(" 8 : 9 "), "8:9");
-  assert.equal(parseCustomRatio("8x9"), "8:9");
-  assert.equal(parseCustomRatio("8 9"), "8:9");
-  assert.equal(parseCustomRatio("1920,1080"), "16:9");
-  assert.equal(parseCustomRatio("4/4"), "1:1");
-  for (const bad of ["", "8", "8,0", "0,9", "8.5,9", "-8,9", "a,b", "8,9,10", "70000,1"]) {
-    assert.equal(parseCustomRatio(bad), null, bad);
+test("a custom ratio takes whole numbers or decimals for each side", () => {
+  assert.equal(parseCustomRatio("8", "9"), "8:9");
+  assert.equal(parseCustomRatio(" 8 ", " 9 "), "8:9");
+  assert.equal(parseCustomRatio("1920", "1080"), "16:9");
+  assert.equal(parseCustomRatio("4", "4"), "1:1");
+  assert.equal(parseCustomRatio("4.5", "16"), "4.5:16");
+  assert.equal(parseCustomRatio("4.50", "16"), "4.5:16");
+  assert.equal(parseCustomRatio(".5", "1"), "0.5:1");
+  for (const [w, h] of [["", "9"], ["8", ""], ["8", "0"], ["0", "9"], ["-8", "9"], ["a", "b"], ["8,5", "9"], ["4.5555", "16"], ["70000", "1"]]) {
+    assert.equal(parseCustomRatio(w, h), null, `${w}:${h}`);
   }
+});
+
+test("a decimal ratio crops to its whole-number twin, as the run does", () => {
+  assert.deepEqual(aspectPair("4.5:16", { width: 1, height: 1 }), [9, 32]);
+  assert.deepEqual(aspectPair("16:9", { width: 1, height: 1 }), [16, 9]);
+  assert.equal(aspectPair("4.5555:16", { width: 1, height: 1 }), null);
+  assert.equal(aspectPair("0:16", { width: 1, height: 1 }), null);
+  assert.ok(aspectMatches(900, 3200, "4.5:16"));
 });

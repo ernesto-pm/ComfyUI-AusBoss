@@ -92,15 +92,29 @@ export function parseAspectRatio(value, source) {
   return parts[0] / parts[1];
 }
 
+// One side of a W:H ratio: a whole number, or one with up to three
+// decimals (4.5:16). The backend reads the same (_transform_engine).
+const RATIO_PART = String.raw`\d+(?:\.\d{1,3})?`;
+export const RATIO_TEXT = new RegExp(`^(${RATIO_PART}):(${RATIO_PART})$`);
+
+export function isRatioText(value) {
+  const match = RATIO_TEXT.exec(String(value ?? ""));
+  return Boolean(match) && Number(match[1]) > 0 && Number(match[2]) > 0;
+}
+
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+
 // A crop_aspect_ratio as the integer pair the backend uses, or null for
 // free (and anything the backend would refuse). "source" is the rotated
-// canvas's own size.
+// canvas's own size. A decimal ratio is its whole-number twin: 4.5:16 is
+// 9:32, as normalize_aspect_ratio has it.
 export function aspectPair(value, source) {
   if (!value || value === "free") return null;
   if (value === "source") return [Math.max(1, Math.round(source.width)), Math.max(1, Math.round(source.height))];
-  const parts = String(value).split(":").map(Number);
-  if (parts.length !== 2 || parts.some((part) => !Number.isInteger(part) || part <= 0)) return null;
-  return parts;
+  if (!isRatioText(value)) return null;
+  const [width, height] = String(value).split(":").map((part) => Math.round(Number(part) * 1000));
+  const divisor = gcd(width, height);
+  return [width / divisor, height / divisor];
 }
 
 // The largest box of a ratio inside width x height, in integers exactly as
@@ -581,19 +595,20 @@ export function turnAspect(aspect) {
   return `${parts[1]}:${parts[0]}`;
 }
 
-// A ratio typed as two whole numbers: "8,9", "8:9", "8x9" or "8 9" all mean
-// 8:9. Reduced, so 1920,1080 is 16:9 and lights that button. Anything else
-// is null.
-export function parseCustomRatio(text) {
-  const match = /^\s*(\d+)\s*(?:[,:x×/]|\s)\s*(\d+)\s*$/i.exec(String(text ?? ""));
-  if (!match) return null;
-  let width = Number(match[1]);
-  let height = Number(match[2]);
-  if (!(width > 0) || !(height > 0) || width > 65536 || height > 65536) return null;
-  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
-  const divisor = gcd(width, height);
-  width /= divisor; height /= divisor;
-  return `${width}:${height}`;
+// A ratio typed as its two sides, each a whole number or up to three
+// decimals ("4.5" and "16" make 4.5:16). Whole numbers are reduced, so 1920
+// and 1080 make 16:9 and light that button; a decimal side is kept as you
+// typed it (trailing zeros dropped). Anything else is null.
+export function parseCustomRatio(width, height) {
+  const sides = [width, height].map((side) => String(side ?? "").trim().replace(/^\./, "0."));
+  if (!sides.every((side) => new RegExp(`^${RATIO_PART}$`).test(side))) return null;
+  let [w, h] = sides.map(Number);
+  if (!(w > 0) || !(h > 0) || w > 65536 || h > 65536) return null;
+  if (Number.isInteger(w) && Number.isInteger(h)) {
+    const divisor = gcd(w, h);
+    w /= divisor; h /= divisor;
+  }
+  return `${w}:${h}`;
 }
 
 // A shape no chip names, for the face: "1.49:1" wide, "1:1.49" tall.

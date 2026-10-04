@@ -241,7 +241,7 @@ class ComfyValidationTests(unittest.TestCase):
                 self.assertEqual(self.errors(prompt, "1"), [])
 
     def test_a_crop_ratio_from_someone_elses_presets_still_runs(self):
-        for ratio in ("5:4", "4:5", "2:1"):
+        for ratio in ("5:4", "4:5", "2:1", "4.5:16"):
             with self.subTest(ratio=ratio):
                 prompt = {"1": self.node("AUSBOSS_NODES_ImageCropRotatePad", image="pic.png", crop_aspect_ratio=ratio)}
                 self.assertEqual(self.errors(prompt, "1"), [])

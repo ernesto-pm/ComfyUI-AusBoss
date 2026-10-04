@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -107,20 +109,28 @@ def fill_rgb(value: str) -> tuple[int, int, int]:
     return parse_fill_color(value)
 
 
+# One side of a W:H ratio: a whole number, or one with up to three decimals
+# (4.5:16). Shared with the presets loader in _transform_inputs.
+RATIO_PART = r"\d+(?:\.\d{1,3})?"
+_RATIO_PART_PATTERN = re.compile(rf"^{RATIO_PART}$")
+
+
 def normalize_aspect_ratio(value: str) -> str:
+    """free, source, or W:H as the reduced whole-number pair: 4.5:16 -> 9:32,
+    the same shape, so the crop math stays in integers."""
     text = str(value or "free").strip().lower()
     if text in {"free", "source"}:
         return text
-    try:
-        width, height = (int(part) for part in text.split(":", 1))
-    except (TypeError, ValueError) as exc:
+    parts = text.split(":", 1)
+    if len(parts) != 2 or not all(_RATIO_PART_PATTERN.match(part.strip()) for part in parts):
         raise ValueError(
             "Transform: input 'crop_aspect_ratio' expected free, source, or W:H."
-        ) from exc
-    if width < 1 or height < 1:
+        )
+    width, height = (Fraction(part.strip()) for part in parts)
+    if width <= 0 or height <= 0:
         raise ValueError("Transform: crop aspect ratio values must be positive.")
-    common = math.gcd(width, height)
-    return f"{width // common}:{height // common}"
+    ratio = width / height
+    return f"{ratio.numerator}:{ratio.denominator}"
 
 
 def _ceil_to_multiple(value: int, multiple: int) -> int:

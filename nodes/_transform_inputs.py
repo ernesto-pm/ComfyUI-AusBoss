@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from ._execution_helpers import warn_once
-from ._transform_engine import TransformSpec
+from ._transform_engine import RATIO_PART, TransformSpec
 
 
 ASPECT_RATIOS = ["free", "source", "1:1", "9:16", "16:9", "2:3", "3:2", "3:4", "4:3", "9:21", "21:9"]
@@ -18,7 +18,14 @@ ASPECT_RATIOS = ["free", "source", "1:1", "9:16", "16:9", "2:3", "3:2", "3:4", "
 # falls back to the built-in list - never breaks node registration.
 PRESETS_PATH = Path(__file__).resolve().parent.parent / "ausboss_presets.json"
 
-_RATIO_PATTERN = re.compile(r"^[1-9]\d*:[1-9]\d*$")
+_RATIO_PATTERN = re.compile(rf"^({RATIO_PART}):({RATIO_PART})$")
+
+
+def is_ratio(value) -> bool:
+    """W:H with both sides above zero; each side whole or up to 3 decimals."""
+    match = _RATIO_PATTERN.match(value.strip()) if isinstance(value, str) else None
+    return bool(match) and all(float(part) > 0 for part in match.groups())
+
 # Preset warnings quote what the user wrote, so the set is capped at this
 # many notes rather than kept for the whole session.
 _warned_presets: set[str] = set()
@@ -57,7 +64,7 @@ def load_custom_aspect_ratios(path: Path | None = None) -> list[str]:
     skipped: list[str] = []
     for entry in entries:
         candidate = str(entry).strip()
-        if _RATIO_PATTERN.match(candidate) or candidate in ("free", "source"):
+        if is_ratio(candidate) or candidate in ("free", "source"):
             if candidate not in valid:
                 valid.append(candidate)
         else:
@@ -65,7 +72,7 @@ def load_custom_aspect_ratios(path: Path | None = None) -> list[str]:
     if skipped:
         safe = ", ".join(item.encode("ascii", "backslashreplace").decode("ascii") for item in skipped)
         warn_once(
-            f"Presets: skipped entries that are not W:H integer pairs: {safe}",
+            f"Presets: skipped entries that are not W:H ratios such as 16:9 or 4.5:16: {safe}",
             _warned_presets, limit=_PRESET_WARNING_LIMIT,
         )
     return valid
@@ -76,14 +83,15 @@ class AspectRatioChoices(list):
 
     ComfyUI checks a list input with ``in`` before a run. A workflow made on
     a machine with other presets can carry a ratio missing here, and the
-    transform draws any whole-number W:H, so any such ratio counts as a
-    member. Everything else is still refused before the run.
+    transform draws any W:H (whole numbers or decimals such as 4.5:16), so
+    any such ratio counts as a member. Everything else is still refused
+    before the run.
     """
 
     def __contains__(self, value) -> bool:
         if list.__contains__(self, value):
             return True
-        return isinstance(value, str) and _RATIO_PATTERN.match(value.strip()) is not None
+        return is_ratio(value)
 
 
 def aspect_ratio_options(path: Path | None = None) -> list[str]:

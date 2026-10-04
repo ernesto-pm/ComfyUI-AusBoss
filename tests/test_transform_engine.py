@@ -21,6 +21,7 @@ if "nodes" in sys.modules and not hasattr(sys.modules["nodes"], "__path__"):
 from nodes._media_helpers import decode_video_frame, video_metadata
 from nodes._transform_engine import (
     _ratio_box,
+    normalize_aspect_ratio,
     scale_to_megapixels,
     TransformSpec,
     stable_file_fingerprint,
@@ -463,6 +464,22 @@ class TestScaleToMegapixels(unittest.TestCase):
     def test_never_below_one_step(self):
         width, height = scale_to_megapixels(100, 100, 0.01, 64)
         self.assertEqual((width, height), (128, 128))
+
+
+
+class DecimalRatioTests(unittest.TestCase):
+    def test_a_half_ratio_is_the_same_shape_in_whole_numbers(self):
+        self.assertEqual(normalize_aspect_ratio("4.5:16"), "9:32")
+        self.assertEqual(normalize_aspect_ratio("16:9"), "16:9")
+        self.assertEqual(normalize_aspect_ratio("1920:1080"), "16:9")
+        self.assertEqual(normalize_aspect_ratio("1.25:1"), "5:4")
+        for bad in ("0:9", "4.5:0", "-1:2", "a:b", "1e3:1", "4.5555:16", "4.5"):
+            with self.subTest(ratio=bad), self.assertRaises(ValueError):
+                normalize_aspect_ratio(bad)
+
+    def test_a_half_ratio_crops_to_its_shape(self):
+        _, _, geometry = transform_pil(solid(320, 320), TransformSpec(crop_aspect_ratio="4.5:16"))
+        self.assertEqual((geometry.crop_width, geometry.crop_height), (90, 320))
 
 
 if __name__ == "__main__":

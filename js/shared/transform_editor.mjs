@@ -50,6 +50,7 @@ import {
   paddingRingGaps,
   parseAspectRatio,
   parseCustomRatio,
+  isRatioText,
   placeKnob,
   ratioLabel,
   rememberedSource,
@@ -171,9 +172,15 @@ function installStyles() {
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption{min-width:34px;text-align:center}
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption.custom{color:#e3e8ec}
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption.held{color:${BRAND};font-weight:600}
-    .ausboss-transform-aspect-custom{flex:0 0 40px;width:40px;box-sizing:border-box;cursor:text;outline:0}
-    .ausboss-transform-aspect-custom::placeholder{color:#7d8a92;font-weight:500}
-    .ausboss-transform-aspect-custom:focus{border-color:${BRAND};background:#0b0f10;color:#fff}
+    .ausboss-transform-custom-ratio{display:flex;align-items:center;gap:5px}
+    .ausboss-transform-custom-label{flex:0 0 auto;min-width:40px;color:#8ca8a5;font-size:10px;padding:0 3px;user-select:none}
+    .ausboss-transform-custom-label.lit{color:${BRAND};font-weight:600}
+    .ausboss-transform-aspect-side{flex:0 0 52px;width:52px;box-sizing:border-box;cursor:text;outline:0}
+    .ausboss-transform-aspect-side::placeholder{color:#7d8a92;font-weight:500}
+    .ausboss-transform-aspect-side:focus{border-color:${BRAND};background:#0b0f10;color:#fff}
+    .ausboss-transform-custom-colon{color:#8ca8a5;font-weight:600;user-select:none}
+    .ausboss-transform-custom-hint{flex:1 1 auto;min-width:0;color:#6f8886;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ausboss-transform-section .ausboss-transform-custom-ratio{margin:0 0 8px}
     .ausboss-transform-aspect-hold{flex:0 0 28px;display:flex;align-items:center;justify-content:center;color:#8d9aa2}
     .ausboss-transform-aspect-hold.idle{opacity:.4;cursor:default}
     .ausboss-transform-aspect-hold.idle:hover{border-color:#4a5058;color:#8d9aa2}
@@ -577,7 +584,7 @@ export function installTransformNode(node, kind, mountPanel = null) {
   const modeRow = buildAspectModeRow(state);
   state.syncAspectChips = chipRow.sync;
   state.syncAspectMode = modeRow.sync;
-  panel.append(chipRow.row, modeRow.row);
+  panel.append(chipRow.row, chipRow.customRow, modeRow.row);
   // Every transform node shows its canvas on the face - fill, feather and,
   // where the node has it, the resize budget and step - so a wrong value is
   // seen on the node, not discovered in the render. Both video nodes also
@@ -601,14 +608,14 @@ export function installTransformNode(node, kind, mountPanel = null) {
     domWidget.serialize = false;
     // exactMinWidth: 330 is the node's real floor, without the frontend's
     // number-widget padding that made the first corner drag jump to 434.
-    fillNodeHeight(domWidget, { minWidth: TRANSFORM_MIN_WIDTH, minHeight: () => transformPanelFloor(node), minNodeSize: [TRANSFORM_MIN_WIDTH, state.isClip ? 802 : kind === "video" ? 570 : 456], exactMinWidth: true });
+    fillNodeHeight(domWidget, { minWidth: TRANSFORM_MIN_WIDTH, minHeight: () => transformPanelFloor(node), minNodeSize: [TRANSFORM_MIN_WIDTH, state.isClip ? 838 : kind === "video" ? 606 : 492], exactMinWidth: true });
   } else {
     node.addWidget?.("button", "Open editor", null, () => openEditor(state), { serialize: false });
   }
   // A fresh node opens at its floor: the stage as tall as its width asks.
   node.setSize?.([
     Math.max(TRANSFORM_MIN_WIDTH, Math.min(520, node.size?.[0] || TRANSFORM_MIN_WIDTH)),
-    node.computeSize?.()[1] || (state.isClip ? 842 : kind === "video" ? 635 : 511),
+    node.computeSize?.()[1] || (state.isClip ? 878 : kind === "video" ? 671 : 547),
   ]);
   if (typeof node.addDOMWidget === "function") {
     // Redraw on wrapper size changes (node resize, zoom relayout);
@@ -784,7 +791,7 @@ function currentCanvas(state) {
 // and the shape a new source is fitted to.
 function liveRequest(state) {
   const request = String(state.node.properties?.ausboss_fit_aspect ?? "");
-  if (!/^\d+:\d+$/.test(request)) return null;
+  if (!isRatioText(request)) return null;
   if (!hasPicture(state)) return request;
   const canvas = currentCanvas(state);
   return aspectMatches(canvas.width, canvas.height, request) ? request : null;
@@ -871,42 +878,66 @@ function buildAspectChipRow(state) {
     });
     chips.push({ chip, aspect }); row.append(chip);
   }
-  // Your own ratio, typed as width and height. It lights like a button
-  // while the canvas has that shape and no button shows it.
-  const custom = createElement("input", "ausboss-transform-aspect ausboss-transform-aspect-custom");
-  custom.type = "text";
-  custom.spellcheck = false;
-  custom.placeholder = "W:H";
-  custom.setAttribute("aria-label", "Custom ratio, width and height");
+  // Your own ratio, width and height in two boxes (decimals welcome:
+  // 4.5 and 16). It lights like a button while the canvas has that shape
+  // and no button shows it. Its own row, under the buttons.
+  const customRow = createElement("div", "ausboss-transform-custom-ratio");
+  const customLabel = createElement("span", "ausboss-transform-custom-label", "Custom");
+  const sideBox = (label) => {
+    const box = createElement("input", "ausboss-transform-aspect ausboss-transform-aspect-side");
+    box.type = "text";
+    box.inputMode = "decimal";
+    box.spellcheck = false;
+    box.placeholder = label[0];
+    box.setAttribute("aria-label", `Custom ratio ${label}`);
+    return box;
+  };
+  const customWidth = sideBox("Width");
+  const customHeight = sideBox("Height");
+  const customHint = createElement("span", "ausboss-transform-custom-hint", "e.g. 4.5 : 16");
+  customRow.append(customLabel, customWidth, createElement("span", "ausboss-transform-custom-colon", ":"), customHeight, customHint);
   const shownRatio = () => {
     const request = liveRequest(state);
     return request && !chips.some(({ aspect }) => oriented(aspect) === request) ? request : "";
   };
+  const showCustom = () => {
+    const [width = "", height = ""] = shownRatio() ? shownRatio().split(":") : [];
+    customWidth.value = width; customHeight.value = height;
+  };
   const commitCustom = () => {
-    const text = custom.value.trim();
+    const width = customWidth.value.trim();
+    const height = customHeight.value.trim();
     const current = shownRatio();
-    if (text === current) return;
-    if (!text) { if (current) tapRatio(state, current); draw(state); return; }
-    const ratio = parseCustomRatio(text);
+    // Both empty: back to the whole picture if your ratio was the lit one.
+    if (!width && !height) { if (current) tapRatio(state, current); draw(state); return; }
+    // One side still to fill in: wait for it.
+    if (!width || !height) return;
+    const ratio = parseCustomRatio(width, height);
     if (!ratio) {
-      showToast({ severity: "warn", summary: "Crop + Rotate + Pad \u{1F18E}", detail: `"${text}" is not a ratio. Type width and height as two whole numbers, like 8,9.`, life: 5000 });
-      custom.value = current;
+      showToast({ severity: "warn", summary: "Crop + Rotate + Pad \u{1F18E}", detail: `${width} : ${height} is not a ratio. Use numbers above zero, like 8 and 9, or 4.5 and 16.`, life: 5000 });
+      showCustom();
       return;
     }
+    if (ratio === current) { showCustom(); return; }
     node.properties ??= {};
-    const [width, height] = ratio.split(":").map(Number);
-    if (width !== height) node.properties.ausboss_pad_portrait = height > width;
+    const [w, h] = ratio.split(":").map(Number);
+    if (w !== h) node.properties.ausboss_pad_portrait = h > w;
     if (liveRequest(state) !== ratio) tapRatio(state, ratio);
     draw(state);
   };
-  custom.addEventListener("pointerdown", (event) => event.stopPropagation());
-  custom.addEventListener("keydown", (event) => {
-    event.stopPropagation();
-    if (event.key === "Enter") custom.blur();
-    if (event.key === "Escape") { custom.value = shownRatio(); custom.blur(); }
-  });
-  custom.addEventListener("blur", commitCustom);
-  row.append(custom);
+  for (const box of [customWidth, customHeight]) {
+    box.addEventListener("pointerdown", (event) => event.stopPropagation());
+    box.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") box.blur();
+      if (event.key === "Escape") { showCustom(); box.blur(); }
+    });
+    // Tabbing from width to height is not a commit; leaving the pair is.
+    box.addEventListener("blur", (event) => {
+      if (event.relatedTarget === customWidth || event.relatedTarget === customHeight) return;
+      commitCustom();
+    });
+  }
   const hold = createElement("button", "ausboss-transform-aspect ausboss-transform-aspect-hold");
   hold.type = "button";
   hold.append(lockGlyph());
@@ -959,11 +990,13 @@ function buildAspectChipRow(state) {
       chip.setAttribute("aria-pressed", String(lit));
     }
     const typed = shownRatio();
-    if (document.activeElement !== custom) custom.value = typed;
-    custom.classList.toggle("active", Boolean(typed));
-    custom.title = typed
-      ? `${pad ? "Padded" : "Cropped"} to your ratio ${typed}. Clear it to go back to the whole picture.`
-      : `Your own ratio: type width and height, like 8,9 for 8:9, then press Enter. It ${pad ? "pads" : "crops"} like a ratio button.`;
+    if (!customRow.contains(document.activeElement)) showCustom();
+    for (const box of [customWidth, customHeight]) box.classList.toggle("active", Boolean(typed));
+    customLabel.classList.toggle("lit", Boolean(typed));
+    customHint.style.display = typed ? "none" : "";
+    customRow.title = typed
+      ? `${pad ? "Padded" : "Cropped"} to your ratio ${typed}. Clear both boxes to go back to the whole picture.`
+      : `Your own ratio: type the width and the height (4.5 and 16 for 4.5:16), then press Enter. It ${pad ? "pads" : "crops"} like a ratio button.`;
     const idle = picture && sourceState(state);
     hold.classList.toggle("on", held);
     hold.classList.toggle("idle", idle);
@@ -977,7 +1010,7 @@ function buildAspectChipRow(state) {
     hold.setAttribute("aria-label", held ? "Shape held" : "Hold the shape");
   };
   sync();
-  return { row, sync };
+  return { row, customRow, sync };
 }
 
 function aspectMode(state) {
@@ -1919,14 +1952,14 @@ function buildControls(state, sidebar) {
   const chipRow = buildAspectChipRow(state);
   const modeRow = buildAspectModeRow(state, { alignment: false });
   state.editorSyncs.push(chipRow.sync, modeRow.sync);
-  cropSection.append(chipRow.row, modeRow.row);
+  cropSection.append(chipRow.row, chipRow.customRow, modeRow.row);
   // Ratios from ausboss_presets.json that no button shows, in either
   // orientation, stay one pick away.
   const ratioWidget = widget(node, "crop_aspect_ratio");
   let ratioValues = ratioWidget?.options?.values;
   if (typeof ratioValues === "function") ratioValues = ratioValues(ratioWidget, node);
   const shown = new Set(ASPECT_CHIP_ORDER.flatMap((aspect) => [aspect, turnAspect(aspect)]));
-  const extra = (Array.isArray(ratioValues) ? ratioValues : []).filter((item) => /^\d+:\d+$/.test(item) && !shown.has(item));
+  const extra = (Array.isArray(ratioValues) ? ratioValues : []).filter((item) => isRatioText(item) && !shown.has(item));
   let more = null;
   if (extra.length) {
     more = createElement("select");
@@ -2391,7 +2424,7 @@ function draw(state) {
 // measured on every draw; before the panel is on screen, these stand in:
 // the rows of a node with no file picked yet, as the examples open (the
 // canvas row's Resize adds the budget row under it).
-const PANEL_CHROME_ESTIMATE = { image: 262, video: 365, clip: 451 };
+const PANEL_CHROME_ESTIMATE = { image: 298, video: 401, clip: 487 };
 const RESIZE_ROW = 30;
 // Node width minus stage width: the DOM widget frame, panel padding, borders.
 const PANEL_SIDE_INSET = 38;

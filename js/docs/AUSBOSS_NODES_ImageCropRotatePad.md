@@ -24,10 +24,11 @@ the picture instead. Tap the lit ratio again to go back to the whole picture.
 **Fit** only acts on a lit ratio, so it is dimmed and says "pick a ratio first"
 until you tap one.
 
-Need a ratio no button shows? Type it in the **W:H** box next to the buttons,
-width then height, and press Enter: `8,9`, `8:9` and `8x9` all mean 8:9. It
-works like a ratio button and stays lit while the canvas has that shape. Clear
-the box to go back to the whole picture.
+Need a ratio no button shows? Type it in the **Custom** row under the buttons:
+the width in the first box, the height in the second, then press Enter. Halves
+and other decimals work, so 4.5 and 16 make 4.5:16. It works like a ratio
+button and stays lit while the canvas has that shape. Clear both boxes to go
+back to the whole picture.
 
 - **A lit ratio is the shape the canvas has now.** Drag a handle to another
   shape and the ratio goes dark; the row says **Custom** and the size line under
@@ -181,7 +182,8 @@ The editor's right sidebar holds the stitcher's settings, the same as on the cli
 The editor's sidebar uses the node's own controls: the same ratio row with its
 orientation button and padlock, the same **Fit** switch, and the same number boxes
 (drag to scrub, click to type, Shift for fine steps: 0.1° on **Degrees**). Ratios you
-added in `ausboss_presets.json` that no button shows are in a **More** list. A ratio
+added in `ausboss_presets.json` that no button shows are in a **More** list
+(decimals work there too: `"4.5:16"`). A ratio
 replaces the existing crop and padding and keeps rotation, fill and resize settings.
 **Divisible by** and the resize **Step** can slightly change the fitted aspect. The size
 box on the stage sits clear of the handles.
