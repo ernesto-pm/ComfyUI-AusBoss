@@ -49,6 +49,7 @@ import {
   paddingHandleCenters,
   paddingRingGaps,
   parseAspectRatio,
+  parseCustomRatio,
   placeKnob,
   ratioLabel,
   rememberedSource,
@@ -141,6 +142,7 @@ function installStyles() {
     .ausboss-transform-source-field:has(input[type=text]){grid-template-columns:minmax(0,1fr)}
     .ausboss-transform-source-hint{overflow:hidden;color:#6f8886;font-size:10.5px;line-height:1.25;white-space:nowrap;text-overflow:ellipsis}
     .lg-node:has(.ausboss-transform-panel) .image-preview{display:none!important}
+    .ausboss-transform-panel.ausboss-transform-drop{outline:2px dashed ${BRAND};outline-offset:-4px;border-radius:6px}
     .ausboss-transform-row{display:flex;gap:7px;align-items:center;flex:0 0 auto}.ausboss-transform-row>*{min-width:0;flex:1}
     .ausboss-transform-canvas-row{justify-content:space-between;flex-wrap:wrap;row-gap:6px}
     .ausboss-transform-canvas-row>label{flex:0 0 auto;display:flex;align-items:center;gap:6px;color:#aeb4ba;font-size:11px;white-space:nowrap;cursor:default;user-select:none}
@@ -169,6 +171,9 @@ function installStyles() {
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption{min-width:34px;text-align:center}
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption.custom{color:#e3e8ec}
     .ausboss-transform-aspects>.ausboss-transform-aspect-caption.held{color:${BRAND};font-weight:600}
+    .ausboss-transform-aspect-custom{flex:0 0 40px;width:40px;box-sizing:border-box;cursor:text;outline:0}
+    .ausboss-transform-aspect-custom::placeholder{color:#7d8a92;font-weight:500}
+    .ausboss-transform-aspect-custom:focus{border-color:${BRAND};background:#0b0f10;color:#fff}
     .ausboss-transform-aspect-hold{flex:0 0 28px;display:flex;align-items:center;justify-content:center;color:#8d9aa2}
     .ausboss-transform-aspect-hold.idle{opacity:.4;cursor:default}
     .ausboss-transform-aspect-hold.idle:hover{border-color:#4a5058;color:#8d9aa2}
@@ -542,7 +547,7 @@ export function installTransformNode(node, kind, mountPanel = null) {
   // suppression also sets Nodes 2.0's hideOutputImages).
   suppressCoreImagePreview(node);
   suppressCoreVideoPreview(node);
-  if (kind === "video") installVideoDrop(state);
+  installMediaDrop(state);
   for (const name of HIDDEN_WIDGETS) hideWidget(widget(node, name));
   liftSocket(node, "fixed_frames");
 
@@ -562,6 +567,7 @@ export function installTransformNode(node, kind, mountPanel = null) {
   row.append(open, resetCrop, reset);
   state.editorSyncs = [];
   panel.append(buildMediaSourceCard(state));
+  installPanelDrop(state, panel);
   const readout = createElement("div", "ausboss-transform-readout");
   state.readout = readout;
   // Its Even out button is a click, not a node drag.
@@ -663,8 +669,10 @@ export function installTransformNode(node, kind, mountPanel = null) {
     if (state.ready) onSourceChanged(state, false);
   }));
   queueMicrotask(async () => {
-    // Core's upload helper can add its button after our creation hook.
+    // Core's upload helper can add its button (and its own drop handler)
+    // after our creation hook.
     for (const name of HIDDEN_WIDGETS) hideWidget(widget(node, name));
+    installMediaDrop(state);
     liftSocket(node, "fixed_frames");
     state.ready = true;
     await onSourceChanged(state, false);
@@ -672,33 +680,81 @@ export function installTransformNode(node, kind, mountPanel = null) {
   return state;
 }
 
-// Dropping a video file on the node uploads it and makes it the source,
-// as core's upload widgets do for their own nodes. Core's canvas drop
-// handler asks the node under the cursor first; a handled drop keeps it
-// from spawning a separate Load Video node for the file.
+// Dropping a picture (or, on the video nodes, a video) on the node uploads
+// it and makes it the source, as core's upload widgets do for their own
+// nodes. Core's canvas drop handler asks the node under the cursor first; a
+// handled drop keeps it from spawning a separate Load node for the file.
+// The panel is a DOM element over the canvas, so core never sees a drag
+// over it as being over the node: the panel takes those drops itself.
 const VIDEO_FILE_PATTERN = /\.(avi|m2ts|m4v|mkv|mov|mp4|mpeg|mpg|mts|webm)$/i;
+const IMAGE_FILE_PATTERN = /\.(apng|avif|bmp|gif|jpe?g|png|tiff?|webp)$/i;
 
-function installVideoDrop(state) {
+function droppedMedia(state, event) {
+  const pattern = state.kind === "video" ? VIDEO_FILE_PATTERN : IMAGE_FILE_PATTERN;
+  return Array.from(event?.dataTransfer?.files ?? []).find(
+    (candidate) => String(candidate.type).startsWith(`${state.kind}/`) || pattern.test(candidate.name),
+  ) ?? null;
+}
+
+function carriesFiles(event) {
+  return Array.from(event?.dataTransfer?.types ?? []).includes("Files");
+}
+
+async function uploadDropped(state, file) {
+  try {
+    await uploadMedia(state.node, state.kind, file);
+    state.syncSourceCard?.();
+    if (state.ready) await onSourceChanged(state, true);
+    notifyAusbossChange();
+  } catch (error) {
+    showToast({ severity: "error", summary: "Crop + Rotate + Pad \u{1F18E}", detail: error.message, life: 8000 });
+  }
+}
+
+function installMediaDrop(state) {
   const node = state.node;
   node.onDragOver = (event) => {
     const items = event?.dataTransfer?.items;
     return Boolean(items && Array.from(items).some((item) => item.kind === "file"));
   };
   node.onDragDrop = async (event) => {
-    const file = Array.from(event?.dataTransfer?.files ?? []).find(
-      (candidate) => String(candidate.type).startsWith("video/") || VIDEO_FILE_PATTERN.test(candidate.name),
-    );
+    const file = droppedMedia(state, event);
     if (!file) return false;
-    try {
-      await uploadMedia(node, "video", file);
-      state.syncSourceCard?.();
-      if (state.ready) await onSourceChanged(state, true);
-      notifyAusbossChange();
-    } catch (error) {
-      showToast({ severity: "error", summary: "Crop + Rotate + Pad \u{1F18E}", detail: error.message, life: 8000 });
-    }
+    await uploadDropped(state, file);
     return true;
   };
+}
+
+function installPanelDrop(state, panel) {
+  let depth = 0;
+  const lit = (on) => panel.classList.toggle("ausboss-transform-drop", on);
+  panel.addEventListener("dragenter", (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    depth += 1; lit(true);
+  });
+  panel.addEventListener("dragover", (event) => {
+    if (!carriesFiles(event)) return;
+    // Without this the browser refuses the drop. It stays on the panel so
+    // core's document handler does not treat it as a canvas drag.
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  panel.addEventListener("dragleave", (event) => {
+    if (!carriesFiles(event)) return;
+    depth = Math.max(0, depth - 1);
+    if (!depth) lit(false);
+  });
+  panel.addEventListener("drop", (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    depth = 0; lit(false);
+    const file = droppedMedia(state, event);
+    if (file) uploadDropped(state, file);
+    else showToast({ severity: "warn", summary: "Crop + Rotate + Pad \u{1F18E}", detail: `Drop ${state.kind === "video" ? "a video" : "an image"} file here.`, life: 5000 });
+  });
 }
 
 // Ratio chips right under the preview, one state each: a chip is lit while
@@ -815,6 +871,42 @@ function buildAspectChipRow(state) {
     });
     chips.push({ chip, aspect }); row.append(chip);
   }
+  // Your own ratio, typed as width and height. It lights like a button
+  // while the canvas has that shape and no button shows it.
+  const custom = createElement("input", "ausboss-transform-aspect ausboss-transform-aspect-custom");
+  custom.type = "text";
+  custom.spellcheck = false;
+  custom.placeholder = "W:H";
+  custom.setAttribute("aria-label", "Custom ratio, width and height");
+  const shownRatio = () => {
+    const request = liveRequest(state);
+    return request && !chips.some(({ aspect }) => oriented(aspect) === request) ? request : "";
+  };
+  const commitCustom = () => {
+    const text = custom.value.trim();
+    const current = shownRatio();
+    if (text === current) return;
+    if (!text) { if (current) tapRatio(state, current); draw(state); return; }
+    const ratio = parseCustomRatio(text);
+    if (!ratio) {
+      showToast({ severity: "warn", summary: "Crop + Rotate + Pad \u{1F18E}", detail: `"${text}" is not a ratio. Type width and height as two whole numbers, like 8,9.`, life: 5000 });
+      custom.value = current;
+      return;
+    }
+    node.properties ??= {};
+    const [width, height] = ratio.split(":").map(Number);
+    if (width !== height) node.properties.ausboss_pad_portrait = height > width;
+    if (liveRequest(state) !== ratio) tapRatio(state, ratio);
+    draw(state);
+  };
+  custom.addEventListener("pointerdown", (event) => event.stopPropagation());
+  custom.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") custom.blur();
+    if (event.key === "Escape") { custom.value = shownRatio(); custom.blur(); }
+  });
+  custom.addEventListener("blur", commitCustom);
+  row.append(custom);
   const hold = createElement("button", "ausboss-transform-aspect ausboss-transform-aspect-hold");
   hold.type = "button";
   hold.append(lockGlyph());
@@ -866,6 +958,12 @@ function buildAspectChipRow(state) {
       chip.classList.toggle("active", lit);
       chip.setAttribute("aria-pressed", String(lit));
     }
+    const typed = shownRatio();
+    if (document.activeElement !== custom) custom.value = typed;
+    custom.classList.toggle("active", Boolean(typed));
+    custom.title = typed
+      ? `${pad ? "Padded" : "Cropped"} to your ratio ${typed}. Clear it to go back to the whole picture.`
+      : `Your own ratio: type width and height, like 8,9 for 8:9, then press Enter. It ${pad ? "pads" : "crops"} like a ratio button.`;
     const idle = picture && sourceState(state);
     hold.classList.toggle("on", held);
     hold.classList.toggle("idle", idle);

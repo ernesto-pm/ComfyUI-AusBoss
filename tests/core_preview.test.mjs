@@ -112,7 +112,7 @@ test("the DOM widget's element is hidden along with it", () => {
 test("every transform node stands down both core previews", async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../js/shared/transform_editor.mjs", import.meta.url), "utf-8");
-  const install = source.slice(source.indexOf("export function installTransformNode"), source.indexOf("function installVideoDrop"));
+  const install = source.slice(source.indexOf("export function installTransformNode"), source.indexOf("function droppedMedia"));
   assert.match(install, /\n\s*suppressCoreImagePreview\(node\);/);
   assert.match(install, /\n\s*suppressCoreVideoPreview\(node\);/);
   assert.doesNotMatch(install, /if \(kind === "image"\) suppressCoreImagePreview/);

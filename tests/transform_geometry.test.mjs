@@ -436,6 +436,7 @@ import {
   padAround,
   ratioLabel,
   slidePadding,
+  parseCustomRatio,
   turnAspect,
   turnedCrop,
 } from "../js/shared/transform_geometry.mjs";
@@ -819,4 +820,16 @@ test("the knob keeps its spot on its arm while it turns", () => {
   // Turned a quarter about the centre, the knob turns with the corner.
   const turned = knobAt({ x: 160, y: 200 }, center, offset);
   assert.ok(Math.abs(turned.x - 120) < 1e-9 && Math.abs(turned.y - 214) < 1e-9, JSON.stringify(turned));
+});
+
+test("a typed custom ratio reads as two whole numbers, reduced", () => {
+  assert.equal(parseCustomRatio("8,9"), "8:9");
+  assert.equal(parseCustomRatio(" 8 : 9 "), "8:9");
+  assert.equal(parseCustomRatio("8x9"), "8:9");
+  assert.equal(parseCustomRatio("8 9"), "8:9");
+  assert.equal(parseCustomRatio("1920,1080"), "16:9");
+  assert.equal(parseCustomRatio("4/4"), "1:1");
+  for (const bad of ["", "8", "8,0", "0,9", "8.5,9", "-8,9", "a,b", "8,9,10", "70000,1"]) {
+    assert.equal(parseCustomRatio(bad), null, bad);
+  }
 });

@@ -5,7 +5,7 @@ Loads an image and applies one reusable **rotate → crop → pad** transform. C
 ## Controls
 
 - **Image source**: Pick an existing input image (the list previews the image under the pointer and filters as you type) or click **Upload** in the compact
-  source card. Dropping an image onto the node still works. The original `image`
+  source card, or drop an image file anywhere on the node. The original `image`
   widget remains the saved/API value; the old picker and upload rows are hidden.
 - **Rotate → Degrees** (`rotation_degrees`): Clockwise rotation before crop and padding.
 - **crop_aspect_ratio**: Free crop, source ratio, or a fixed ratio.
@@ -23,6 +23,11 @@ fill bands are added around it, centred. Set **Fit** to crop and the ratio trims
 the picture instead. Tap the lit ratio again to go back to the whole picture.
 **Fit** only acts on a lit ratio, so it is dimmed and says "pick a ratio first"
 until you tap one.
+
+Need a ratio no button shows? Type it in the **W:H** box next to the buttons,
+width then height, and press Enter: `8,9`, `8:9` and `8x9` all mean 8:9. It
+works like a ratio button and stays lit while the canvas has that shape. Clear
+the box to go back to the whole picture.
 
 - **A lit ratio is the shape the canvas has now.** Drag a handle to another
   shape and the ratio goes dark; the row says **Custom** and the size line under

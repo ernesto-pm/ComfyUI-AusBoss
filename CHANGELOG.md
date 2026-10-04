@@ -2,6 +2,17 @@
 
 All notable changes to ComfyUI-AusBoss are documented here.
 
+## Unreleased
+
+- **Image Crop + Rotate + Pad: drop a picture on the node.** Drag an image
+  file from your computer onto the node and it is uploaded and used, the
+  same as clicking Upload. The node shows a dashed outline while you hold
+  a file over it. The video nodes take a dropped video the same way, now
+  also when you drop it on the picture rather than the title bar.
+- **Crop + Rotate + Pad: type your own ratio.** The box after the ratio
+  buttons takes a width and height, such as `8,9` for 8:9. Press Enter and
+  it pads (or crops) to that shape like any ratio button.
+
 ## 2.6.1 - 2026-10-03
 
 - **LoRA Loader: Fetch Civitai info is back.** Open a LoRA's info card and

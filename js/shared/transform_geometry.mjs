@@ -581,6 +581,21 @@ export function turnAspect(aspect) {
   return `${parts[1]}:${parts[0]}`;
 }
 
+// A ratio typed as two whole numbers: "8,9", "8:9", "8x9" or "8 9" all mean
+// 8:9. Reduced, so 1920,1080 is 16:9 and lights that button. Anything else
+// is null.
+export function parseCustomRatio(text) {
+  const match = /^\s*(\d+)\s*(?:[,:x×/]|\s)\s*(\d+)\s*$/i.exec(String(text ?? ""));
+  if (!match) return null;
+  let width = Number(match[1]);
+  let height = Number(match[2]);
+  if (!(width > 0) || !(height > 0) || width > 65536 || height > 65536) return null;
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const divisor = gcd(width, height);
+  width /= divisor; height /= divisor;
+  return `${width}:${height}`;
+}
+
 // A shape no chip names, for the face: "1.49:1" wide, "1:1.49" tall.
 export function ratioLabel(width, height) {
   if (!(width > 0) || !(height > 0)) return "";
